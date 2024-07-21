@@ -1,0 +1,11 @@
+numpy
+pandas
+seaborn
+matplotlib
+
+pywavelets
+tensorflow==2.15.0
+tensorflowjs
+scikit-learn
+
+ipykernel

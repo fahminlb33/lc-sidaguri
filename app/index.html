@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="./assets/img/kodesiana.png" />
+    <title>LC-Sidaguri</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/plotly.js@2.34.0/dist/plotly.min.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.12.3/dist/sweetalert2.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons@4.29.2/dist/feather.min.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"
+      defer
+    ></script>
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@1.0.1/css/bulma.min.css"
+    />
+    <link rel="stylesheet" href="./assets/css/style.css" />
+  </head>
+
+  <body>
+    <section class="section" x-data="app">
+      <div class="container">
+        <h1 class="title">LC-Sidaguri</h1>
+        <p class="subtitle">
+          Klasifikasi dan autentikasi sidaguri (<em>Sida rhombifolia</em>)
+          berdasarkan
+          <strong>Liquid Chromatography-Mass Spectrometry (LC-MS)</strong>
+          menggunakan fitur
+          <strong>Continuous Wavelet Transform (CWT)</strong> dan
+          <strong>Convolutional Neural Network (CNN)</strong>.
+        </p>
+
+        <!-- STATUS -->
+        <div x-show="!ready">
+          <h5 class="title is-5 mt-6">Menyiapkan sistem... Harap tunggu.</h5>
+
+          <i data-feather="settings" class="loader-spinner"></i>
+        </div>
+
+        <!-- START Controls -->
+        <div class="control-container mt-6" x-show="ready">
+          <!-- Upload -->
+          <div class="file has-name mb-0">
+            <label class="file-label">
+              <input
+                type="file"
+                class="file-input"
+                name="file"
+                id="file"
+                :disabled="controlsDisabled"
+                x-ref="datasetFile"
+                @change="uploadDataset"
+              />
+              <span class="file-cta">
+                <span class="file-icon">
+                  <i data-feather="upload"></i>
+                </span>
+                <span class="file-label"> Unggah spektra </span>
+              </span>
+              <span class="file-name" x-text="fileName"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="control-container mt-3 mb-6" x-show="ready">
+          <!-- Model Selection -->
+          <div class="select">
+            <select x-model="selectedModel" @change="changeModel">
+              <template x-for="item in availabeModels" :key="item.value">
+                <option :value="item.value" x-text="item.name"></option>
+              </template>
+            </select>
+          </div>
+
+          <!-- Classify -->
+          <button
+            class="button is-primary"
+            :disabled="controlsDisabled"
+            @click="extractScalogram"
+          >
+            Klasifikasi
+          </button>
+
+          <!-- Reset -->
+          <button
+            class="button is-danger"
+            :disabled="controlsDisabled"
+            @click="clear"
+          >
+            Bersihkan
+          </button>
+        </div>
+        <!-- END Controls -->
+
+        <!-- START Result -->
+        <div class="box" x-show="results.length > 0">
+          <div class="columns">
+            <template x-for="result in results">
+              <div class="column">
+                <p
+                  x-text="result.targetName"
+                  class="is-size-5 has-text-weight-bold"
+                  :class="result.isTarget && 'has-text-success'"
+                ></p>
+                <p><span x-text="result.probability"></span>%</p>
+              </div>
+            </template>
+          </div>
+        </div>
+        <!-- END Result -->
+
+        <!-- START Plots -->
+        <div class="columns is-desktop" x-show="ready">
+          <!-- Chromatogram -->
+          <div class="column is-half">
+            <div class="box">
+              <h5 class="title is-5">Spectrum</h5>
+              <canvas id="chromatogram" class="plot-chromatogram"></canvas>
+            </div>
+          </div>
+
+          <!-- Scalogram -->
+          <div class="column is-half">
+            <div class="box">
+              <h5 class="title is-5">Scalogram</h5>
+              <canvas id="scalogram" class="plot-scalogram"></canvas>
+            </div>
+          </div>
+        </div>
+        <!-- END Plots-->
+      </div>
+    </section>
+
+    <script>
+      feather.replace();
+    </script>
+    <script src="./assets/js/app.js"></script>
+  </body>
+</html>
