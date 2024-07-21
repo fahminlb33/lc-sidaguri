@@ -55,7 +55,7 @@
                 id="file"
                 :disabled="controlsDisabled"
                 x-ref="datasetFile"
-                @change="uploadDataset"
+                @change="upload"
               />
               <span class="file-cta">
                 <span class="file-icon">
@@ -82,7 +82,7 @@
           <button
             class="button is-primary"
             :disabled="controlsDisabled"
-            @click="extractScalogram"
+            @click="classify"
           >
             Klasifikasi
           </button>

@@ -30,8 +30,13 @@ function dedent(callSite, ...args) {
   return format(output);
 }
 
-// ref: https://pyodide.org/en/stable/usage/webworker.html
-async function initialize() {
+/**
+ * Initialize the pyodide VM
+ * ref: https://pyodide.org/en/stable/usage/webworker.html
+ * @param {*} data
+ * @param {MessagePort} port
+ */
+async function initialize(data, port) {
   // load pyodide
   console.info("WORKER: loading pyodide...");
   self.pyodide = await loadPyodide();
@@ -47,9 +52,20 @@ async function initialize() {
     import pywt
     import numpy as np
   `);
+
+  // send OK
+  port.postMessage(null);
+  console.info("WORKER: ready!");
 }
 
-async function extractScalogram({ id, rt, values, mean, std }) {
+/**
+ * Extract scalogram using CWT
+ * @param {*} data
+ * @param {MessagePort} port
+ */
+async function extractScalogram(data, port) {
+  const { rt, values, mean, std } = data;
+
   // set variables
   // self.pyodide.globals.set("rt", rt);
   self.pyodide.globals.set("values", values);
@@ -80,28 +96,39 @@ async function extractScalogram({ id, rt, values, mean, std }) {
     rawOutput.destroy();
 
     // send results back to main thread
-    self.postMessage({ id, runner: "extractScalogram", result });
+    port.postMessage(result);
   } catch (error) {
-    console.error(error);
+    console.error("Error when extracting scalogram", error);
 
     // send error back to main thread
-    self.postMessage({ id, runner: "extractScalogram", error: error.message });
+    port.postMessage({ error: error.message });
   }
 }
 
-const initializePromise = initialize().then(() =>
-  self.postMessage({ id: "pyodideReady" }),
-);
-
+/**
+ * Handle message from main thread
+ * @param {MessageEvent} event
+ */
 self.onmessage = async (event) => {
-  // make sure loading is done
-  await initializePromise;
+  // get func name and port
+  const port = event.ports[0];
+  const { func } = event.data;
 
   // run function
-  const { id, runner } = event.data;
-  if (runner === "extractScalogram") {
-    await extractScalogram(event.data);
-  } else {
-    console.error("Not implemented!", id, runner);
+  switch (func) {
+    case "initialize":
+      await initialize(event.data, port);
+      break;
+
+    case "extractScalogram":
+      await extractScalogram(event.data, port);
+      break;
+
+    default:
+      console.error("Not implemented!", id, func);
+      break;
   }
+
+  // close port
+  port.close();
 };

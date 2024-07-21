@@ -1,3 +1,7 @@
+// ===================================
+//   AVAILABLE CLASSIFICATION MODELS
+// ===================================
+
 const MODELS = {
   sidaguri_duha: {
     name: "Sidaguri - Duha",
@@ -29,19 +33,44 @@ const MODELS = {
   },
 };
 
+// ===================================
+//   WORKER METHODS
+// ===================================
+
+const runOnWorker = (worker, func, data) => {
+  return new Promise((resolve, reject) => {
+    // create channel
+    const channel = new MessageChannel();
+
+    // handle response
+    channel.port1.onmessage = (event) => {
+      // close port
+      channel.port1.close();
+
+      // call resolve or reject
+      if (event.data && event.data.error) {
+        reject(event.data.error);
+      } else {
+        resolve(event.data);
+      }
+    };
+
+    // post message to worker
+    worker.postMessage({ func, ...data }, [channel.port2]);
+  });
+};
+
+// ===================================
+//   ALPINE APP
+// ===================================
+
 document.addEventListener("alpine:init", () => {
-  let tfmodel = null;
   let worker = null;
-  let lastCanvasContext = null;
-  let counter = 0;
+  let tfmodel = null;
+  let chartContext = null;
   let pyodideReady = false;
-  const resolvers = new Map();
-  const rejectors = new Map();
 
-  // ===================================
-  //   ALPINE APP
-  // ===================================
-
+  // alpine app
   Alpine.data("app", () => ({
     // states
     rt: [],
@@ -67,36 +96,12 @@ document.addEventListener("alpine:init", () => {
       // initialize pyodide
       console.info("Initializing Pyodide VM...");
       worker = new Worker("./assets/js/worker.js");
-      worker.onmessage = (event) => {
-        // check if the worker is ready
-        if (event.data.id === "pyodideReady") {
-          pyodideReady = true;
-          this.checkReady();
-          return;
-        }
+      runOnWorker(worker, "initialize", {}).then(() => {
+        pyodideReady = true;
 
-        // get the resolve and reject functions
-        const resolve = resolvers.get(event.data.id);
-        const reject = rejectors.get(event.data.id);
-
-        // if the resolve function is not found, ignore the message
-        if (resolve) {
-          // if the message contains an error, reject the promise
-          if (event.data.error !== undefined) {
-            reject(new Error(event.data.error));
-          } else {
-            // resolve the promise
-            if (event.data.runner === "extractScalogram") {
-              resolve(event.data.result);
-            } else {
-              reject(new Error("Not implemented!"));
-            }
-          }
-
-          resolvers.delete(event.data.id);
-          rejectors.delete(event.data.id);
-        }
-      };
+        // update UI
+        this.checkReady();
+      });
     },
 
     changeModel() {
@@ -119,7 +124,7 @@ document.addEventListener("alpine:init", () => {
       });
     },
 
-    uploadDataset() {
+    upload() {
       // check if file is available
       let file = this.$refs.datasetFile.files[0];
       if (!file) {
@@ -190,7 +195,7 @@ document.addEventListener("alpine:init", () => {
       });
     },
 
-    async extractScalogram() {
+    async classify() {
       // check if dataset is available
       if (this.rt.length === 0) {
         Swal.fire({
@@ -205,19 +210,11 @@ document.addEventListener("alpine:init", () => {
       this.toggleUI(false);
 
       // increment the counter and create a promise
-      const id = `${++counter}`;
-      const result = await new Promise((resolve, reject) => {
-        resolvers.set(id, resolve);
-        rejectors.set(id, reject);
-        // send the message to the worker
-        worker.postMessage({
-          runner: "extractScalogram",
-          id,
-          rt: JSON.stringify(this.rt),
-          values: JSON.stringify(this.values),
-          mean: MODELS[this.selectedModel].mean,
-          std: MODELS[this.selectedModel].std,
-        });
+      const result = await runOnWorker(worker, "extractScalogram", {
+        rt: JSON.stringify(this.rt),
+        values: JSON.stringify(this.values),
+        mean: MODELS[this.selectedModel].mean,
+        std: MODELS[this.selectedModel].std,
       });
 
       // get the extracted features from worker
@@ -273,12 +270,12 @@ document.addEventListener("alpine:init", () => {
       const chromatogramElement = document.getElementById("chromatogram");
 
       // if there is a last canvas context, destroy it
-      if (lastCanvasContext) {
-        lastCanvasContext.destroy();
+      if (chartContext) {
+        chartContext.destroy();
       }
 
       // render the new canvas
-      lastCanvasContext = new Chart(chromatogramElement, {
+      chartContext = new Chart(chromatogramElement, {
         type: "line",
         data: {
           labels: this.rt,
