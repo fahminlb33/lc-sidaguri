@@ -2,7 +2,7 @@ const MODELS = {
   sidaguri_duha: {
     name: "Sidaguri - Duha",
     // path: "./assets/model/sidaguri-duha/model.json",
-    path: "https://blob.kodesiana.com/kodesiana-ai-public/models/lc-sidaguri/js_lcms_classif_kejibeling_sirih/model.json",
+    path: "https://blob.kodesiana.com/kodesiana-ai-public/models/lc-sidaguri/js_lcms_classif_sidaguri_duha/model.json",
     mean: 30488685.23260185,
     std: 78338321.0455869,
     class_map: {
