@@ -5,59 +5,24 @@
 const MODELS = {
   sidaguri_duha: {
     name: "Sidaguri - Duha",
-    // path: "./assets/model/sidaguri-duha/model.json",
-    path: "https://blob.kodesiana.com/kodesiana-ai-public/models/lc-sidaguri/js_lcms_classif_sidaguri_duha/model.json",
-    mean: 30488685.23260185,
-    std: 78338321.0455869,
-    class_map: {
-      0: "Campuran 5%",
-      1: "Campuran 25%",
-      2: "Campuran 50%",
-      3: "Sidaguri",
-      4: "Duha",
+    classifierModel: "./assets/model/sidaguri_duha-classif-web/model.json",
+    regressionModel: "./assets/model/sidaguri_duha-reg-web/model.json",
+    classMap: {
+      0: "Adulteration",
+      1: "Sida rhombifolia",
+      2: "Turnera subulata",
     },
   },
   kejibeling_sirih: {
     name: "Keji Beling - Sirih",
-    // path: "./assets/model/keji_beling-sirih/model.json",
-    path: "https://blob.kodesiana.com/kodesiana-ai-public/models/lc-sidaguri/js_lcms_classif_kejibeling_sirih/model.json",
-    mean: 43877836.5496915,
-    std: 104778972.11904727,
-    class_map: {
-      0: "Campuran 5%",
-      1: "Campuran 25%",
-      2: "Campuran 50%",
-      3: "Keji Beling",
-      4: "Sirih Hutan",
+    classifierModel: "./assets/model/kejibeling_sirih-classif-web/model.json",
+    regressionModel: "./assets/model/kejibeling_sirih-reg-web/model.json",
+    classMap: {
+      0: "Adulteration",
+      1: "Strobilanthes crispa",
+      2: "Piper aduncum",
     },
   },
-};
-
-// ===================================
-//   WORKER METHODS
-// ===================================
-
-const runOnWorker = (worker, func, data) => {
-  return new Promise((resolve, reject) => {
-    // create channel
-    const channel = new MessageChannel();
-
-    // handle response
-    channel.port1.onmessage = (event) => {
-      // close port
-      channel.port1.close();
-
-      // call resolve or reject
-      if (event.data && event.data.error) {
-        reject(event.data.error);
-      } else {
-        resolve(event.data);
-      }
-    };
-
-    // post message to worker
-    worker.postMessage({ func, ...data }, [channel.port2]);
-  });
 };
 
 // ===================================
@@ -65,18 +30,25 @@ const runOnWorker = (worker, func, data) => {
 // ===================================
 
 document.addEventListener("alpine:init", () => {
-  let worker = null;
-  let tfmodel = null;
   let chartContext = null;
-  let pyodideReady = false;
+  let classifierModel = null;
+  let regressionModel = null;
 
   // alpine app
   Alpine.data("app", () => ({
-    // states
+    // --- states
+    // input file
+    fileName: "",
+    // chromatogram
     rt: [],
     values: [],
-    results: [],
-    fileName: "",
+    // prediction output
+    prediction: {
+      targetName: "",
+      probability: "",
+      concentration: "",
+    },
+    // UI
     ready: false,
     controlsDisabled: true,
     selectedModel: "sidaguri_duha",
@@ -90,34 +62,35 @@ document.addEventListener("alpine:init", () => {
       // reset UI
       this.clear();
 
-      // initialize tensorflow model
+      // initialize ONNX model
       this.changeModel();
-
-      // initialize pyodide
-      console.info("Initializing Pyodide VM...");
-      worker = new Worker("./assets/js/worker.js");
-      runOnWorker(worker, "initialize", {}).then(() => {
-        pyodideReady = true;
-
-        // update UI
-        this.checkReady();
-      });
     },
 
     changeModel() {
       // set model empty
-      tfmodel = null;
+      classifierModel = null;
+      regressionModel = null;
 
       // update UI
       this.checkReady();
 
       // load model async
-      console.info("Initializing TensorFlow model...");
-      tf.loadGraphModel(MODELS[this.selectedModel].path).then((model) => {
-        console.info("Model loaded!");
+      console.info("Initializing TensorFlow.js model...");
+      tf.loadGraphModel(MODELS[this.selectedModel].classifierModel).then(model => {
+        console.info("Classification model loaded!");
 
         // cache model
-        tfmodel = model;
+        classifierModel = model;
+
+        // update UI
+        this.checkReady();
+      });
+
+      tf.loadGraphModel(MODELS[this.selectedModel].regressionModel).then(model => {
+        console.info("Regression model loaded!");
+
+        // cache model
+        regressionModel = model;
 
         // update UI
         this.checkReady();
@@ -130,8 +103,8 @@ document.addEventListener("alpine:init", () => {
       if (!file) {
         Swal.fire({
           icon: "warning",
-          title: "Gagal Unggah",
-          text: "Berkas belum dipilih!",
+          title: "Upload failed",
+          text: "File is not selected!",
         });
         return;
       }
@@ -156,8 +129,8 @@ document.addEventListener("alpine:init", () => {
             console.error("Error when parsing CSV", results.errors);
             Swal.fire({
               icon: "error",
-              title: "Gagal Unggah",
-              text: "Terjadi kesalahan ketika mengunggah data! Lihat error pada Console.",
+              title: "Upload failed",
+              text: "There's an error parsing the uploaded CSV file. Check browser's DevTools.",
             });
             return;
           }
@@ -185,12 +158,8 @@ document.addEventListener("alpine:init", () => {
           // make UI available
           this.toggleUI(true);
 
-          // show message
-          Swal.fire({
-            icon: "success",
-            title: "Berhasil Unggah",
-            text: `Berhasil mengunggah dataset! ${this.rt.length} data diunggah.`,
-          });
+          // run classification
+          this.classify();
         },
       });
     },
@@ -200,8 +169,8 @@ document.addEventListener("alpine:init", () => {
       if (this.rt.length === 0) {
         Swal.fire({
           icon: "error",
-          title: "Gagal Prediksi",
-          text: "Dataset belum diunggah!",
+          title: "Prediction failed",
+          text: "Dataset is not uploaded or empty!",
         });
         return;
       }
@@ -209,60 +178,54 @@ document.addEventListener("alpine:init", () => {
       // make UI disabled
       this.toggleUI(false);
 
-      // increment the counter and create a promise
-      const result = await runOnWorker(worker, "extractScalogram", {
-        rt: JSON.stringify(this.rt),
-        values: JSON.stringify(this.values),
-        mean: MODELS[this.selectedModel].mean,
-        std: MODELS[this.selectedModel].std,
-      });
+      // run prediction
+      const X = tf.expandDims(tf.expandDims(tf.tensor(this.values), axis=-1), axis=0);
+      const predictedProbaClasses = await classifierModel.predict(X);
+      console.log("predictedProbaClasses", predictedProbaClasses)
 
-      // get the extracted features from worker
-      const img = tf.tensor(result);
+      // convert tensor to primitive types
+      const predictedTarget = await tf.argMax(predictedProbaClasses, axis=1).dataSync();
+      const predictedProba = await predictedProbaClasses.dataSync();
 
-      // (1) run classification
-      const imgPredict = tf.expandDims(tf.expandDims(img, -1), 0);
-      const prediction = tfmodel.predict(imgPredict);
-      const predictedClass = prediction.argMax(-1).dataSync()[0];
+      // set prediction result
+      this.prediction.targetName = MODELS[this.selectedModel].classMap[predictedTarget[0]];
+      this.prediction.probability = (predictedProba[predictedTarget[0]] * 100).toFixed(4);
 
-      // create results
-      this.results = [];
-      const predictionsArr = prediction.dataSync();
-      for (let i = 0; i < predictionsArr.length; i++) {
-        this.results.push({
-          probability: (predictionsArr[i] * 100).toFixed(2),
-          targetName: MODELS[this.selectedModel].class_map[i],
-          isTarget: i == predictedClass,
-        });
+      // check if we need to run the regression model
+      if (predictedTarget[0] === 0) {
+        // run prediction for regression model
+        const regPredicted = await regressionModel.predict(X);
+
+        // convert to primitive
+        const predictedAdulterationPercent = await regPredicted.dataSync();
+        console.log("predictedAdulterationPercent", predictedAdulterationPercent)
+
+        // set prediction result
+        this.prediction.concentration = predictedAdulterationPercent[0].toFixed(4) + "%";
+      } else {
+        this.prediction.concentration = "No adulteration!"
       }
-
-      // (2) min-max transform for visualization
-      const min = tf.min(img);
-      const max = tf.max(img);
-      const imgNorm = img.sub(min).div(max.sub(min));
-      tf.browser.toPixels(imgNorm, document.getElementById("scalogram"));
-
+      
       // make UI available
       this.toggleUI(true);
     },
 
     clear() {
-      // set empty
-      this.rt = [];
-      this.values = [];
-      this.results = [];
+      // clear input file
       this.fileName = "";
+      this.$refs.datasetFile.value = null;
 
       // clear chromatogram
+      this.rt = [];
+      this.values = [];
       this.renderChromatogram();
 
-      // clear scalogram
-      const canvas = document.getElementById("scalogram");
-      const context = canvas.getContext("2d");
-      context.clearRect(0, 0, canvas.width, canvas.height);
-
-      // clear input file
-      this.$refs.datasetFile.value = null;
+      // clear prediction
+      this.prediction = {
+        targetName: "",
+        probability: "",
+        concentration: "",
+      }
     },
 
     renderChromatogram() {
@@ -284,10 +247,13 @@ document.addEventListener("alpine:init", () => {
               label: "Intensity",
               data: this.values,
               borderWidth: 1,
+              pointRadius: 0,
             },
           ],
         },
         options: {
+          responsive: true,
+          maintainAspectRatio: false,
           scales: {
             y: {
               beginAtZero: true,
@@ -322,7 +288,7 @@ document.addEventListener("alpine:init", () => {
     // ===================================
 
     checkReady() {
-      this.ready = pyodideReady && tfmodel != null;
+      this.ready = classifierModel != null && regressionModel != null;
       this.controlsDisabled = !this.ready;
     },
 
