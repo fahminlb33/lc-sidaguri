@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="shortcut icon" href="./assets/img/kodesiana.png" />
+  
   <title>LC-Sidaguri</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js" integrity="sha256-ywP2rQ+ZI3bcxzXcNCaQFHfKBcQ04DIfByuUhpp8wr0=" crossorigin="anonymous"></script>
@@ -29,13 +30,19 @@
       </p>
 
       <!-- STATUS -->
-      <div x-show="!ready">
+      <div x-show="!ready && !faulted">
         <h5 class="title is-5 mt-6">System initialization... Please wait</h5>
-        <i data-feather="settings" class="loader-spinner"></i>
+        <i data-feather="settings" class="icon-loader-spinner"></i>
+      </div>
+
+      <!-- FAULTED -->
+      <div x-show="faulted">
+        <h5 class="title is-5 mt-6">Initialization faulted! Check the DevTools.</h5>
+        <i data-feather="alert-triangle" class="icon-exclamation"></i>
       </div>
 
       <!-- START Controls -->
-      <div x-show="ready">
+      <div x-show="ready" class="mb-4">
         <div class="is-flex is-flex-wrap-wrap mt-6 mb-3" style="column-gap: 10px;">
           <!-- Upload -->
           <div class="control">

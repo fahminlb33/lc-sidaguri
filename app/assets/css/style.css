@@ -10,10 +10,16 @@
   margin-top: 30px;
 }
 
-.loader-spinner {
+.icon-loader-spinner {
   animation: rotation 2s infinite linear;
   height: 50px;
   width: 50px;
+}
+
+.icon-exclamation {
+  animation: pulse-animation 2s infinite;
+  height: 100px;
+  width: 100px;
 }
 
 @keyframes rotation {
@@ -22,5 +28,19 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-animation {
+  from {
+    transform: scale3d(1, 1, 1);
+  }
+
+  50% {
+    transform: scale3d(1.2, 1.2, 1.2);
+  }
+
+  to {
+    transform: scale3d(1, 1, 1);
   }
 }

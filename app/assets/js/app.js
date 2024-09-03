@@ -4,9 +4,10 @@
 
 const MODELS = {
   sidaguri_duha: {
-    name: "Sidaguri - Duha",
+    name: "S. rhombifolia - T. subulata",
     classifierModel: "./assets/model/sidaguri_duha-classif-web/model.json",
     regressionModel: "./assets/model/sidaguri_duha-reg-web/model.json",
+    length: 803,
     classMap: {
       0: "Adulteration",
       1: "Sida rhombifolia",
@@ -14,9 +15,10 @@ const MODELS = {
     },
   },
   kejibeling_sirih: {
-    name: "Keji Beling - Sirih",
+    name: "S. crispa - P. aduncum",
     classifierModel: "./assets/model/kejibeling_sirih-classif-web/model.json",
     regressionModel: "./assets/model/kejibeling_sirih-reg-web/model.json",
+    length: 938,
     classMap: {
       0: "Adulteration",
       1: "Strobilanthes crispa",
@@ -29,11 +31,11 @@ const MODELS = {
 //   ALPINE APP
 // ===================================
 
-document.addEventListener("alpine:init", () => {
-  let chartContext = null;
-  let classifierModel = null;
-  let regressionModel = null;
+let chartContext = null;
+let classifierModel = null;
+let regressionModel = null;
 
+document.addEventListener("alpine:init", () => {
   // alpine app
   Alpine.data("app", () => ({
     // --- states
@@ -50,6 +52,7 @@ document.addEventListener("alpine:init", () => {
     },
     // UI
     ready: false,
+    faulted: false,
     controlsDisabled: true,
     selectedModel: "sidaguri_duha",
     availabeModels: Object.entries(MODELS).map(([k, v]) => ({
@@ -84,6 +87,9 @@ document.addEventListener("alpine:init", () => {
 
         // update UI
         this.checkReady();
+      }).catch(() => {
+        this.faulted = true;
+        this.checkReady();
       });
 
       tf.loadGraphModel(MODELS[this.selectedModel].regressionModel).then(model => {
@@ -93,6 +99,9 @@ document.addEventListener("alpine:init", () => {
         regressionModel = model;
 
         // update UI
+        this.checkReady();
+      }).catch(() => {
+        this.faulted = true;
         this.checkReady();
       });
     },
@@ -150,6 +159,17 @@ document.addEventListener("alpine:init", () => {
             // push data
             this.rt.push(RT);
             this.values.push(parseFloat(item[1]));
+          }
+
+          // check length
+          const expectedLength = MODELS[this.selectedModel].length;
+          if (this.values.length != expectedLength) {
+            Swal.war({
+              icon: "warning",
+              title: "Prediction failed",
+              text: `Dataset has the wrong length of data! Expected ${expectedLength} data points.`,
+            });
+            return;
           }
 
           // show plot
@@ -288,6 +308,12 @@ document.addEventListener("alpine:init", () => {
     // ===================================
 
     checkReady() {
+      if (this.faulted) {
+        this.ready = false;
+        this.controlsDisabled = true;
+        return;
+      }
+
       this.ready = classifierModel != null && regressionModel != null;
       this.controlsDisabled = !this.ready;
     },
