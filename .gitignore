@@ -163,7 +163,7 @@ cython_debug/
 data/
 
 # Model for web
-app/assets/model/
+# app/assets/model/
 
 # Temp dir
 temp/
