@@ -1,0 +1,17 @@
+numpy<2.0.0
+pandas
+seaborn
+matplotlib
+
+pywavelets
+tensorflow[and-cuda]
+tensorboard
+tensorflowjs[wizard]==4.20.0
+scikit-learn
+
+ipykernel
+pydantic
+Jinja2
+
+skl2onnx
+onnxruntime
